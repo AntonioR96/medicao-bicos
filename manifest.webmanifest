@@ -1,0 +1,17 @@
+{
+  "name": "Medição de Bicos CASI",
+  "short_name": "Bicos CASI",
+  "description": "Coleta bico a bico da vazão dos pulverizadores e relatório em PDF.",
+  "lang": "pt-BR",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FFFFFF",
+  "theme_color": "#20497E",
+  "icons": [
+    { "src": "icones/icone_192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icones/icone_512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icones/icone_512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

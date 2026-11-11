@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Medição de Bicos CASI</title>
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#20497E">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icones/icone_192.png">
+  <link rel="apple-touch-icon" href="icones/icone_192.png">
+  <style>
+    /* Só a tela de entrada. O resto do visual vem cifrado no pacote. */
+    .entrada { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px 16px;
+      box-sizing: border-box; background: #20497E; font-family: Calibri, Carlito, "Segoe UI", Roboto, Arial, sans-serif; }
+    body:has(.entrada) { margin: 0; background: #20497E; }
+    .cartao { width: 100%; max-width: 360px; background: #fff; border-radius: 14px; padding: 24px 20px; box-sizing: border-box;
+      color: #1A2230; box-shadow: 0 8px 30px rgba(0,0,0,.25); }
+    .cartao img { display: block; width: 96px; height: 96px; border-radius: 20px; margin: 0 auto 12px; }
+    .cartao h1 { font-family: "Calibri Light", Calibri, sans-serif; font-weight: 400; font-size: 24px; text-align: center;
+      color: #20497E; margin: 0 0 18px; }
+    .cartao label { display: block; font-weight: 700; font-size: 16px; margin: 12px 0 6px; }
+    .cartao input[type=text], .cartao input[type=password] { width: 100%; box-sizing: border-box; font-size: 18px;
+      padding: 12px; border: 1.5px solid #D5DCE4; border-radius: 10px; font-family: inherit; }
+    .cartao input:focus { outline: 2px solid #4C84C0; border-color: #4C84C0; }
+    .cartao button { width: 100%; margin-top: 18px; padding: 14px; font-size: 18px; font-weight: 700; color: #fff;
+      background: #20497E; border: 0; border-radius: 10px; font-family: inherit; }
+    .cartao button:disabled { opacity: .6; }
+    .msg { min-height: 22px; margin-top: 12px; font-size: 15px; text-align: center; color: #C0392B; }
+    .msg.ok { color: #6B7885; }
+    .rodape { margin-top: 14px; font-size: 13px; text-align: center; color: #6B7885; }
+  </style>
+</head>
+<body>
+  <header class="topo" style="display:none">
+    <a href="#/" class="topo-marca" aria-label="Início">
+      <img id="logoTopo" alt="CASI">
+      <span>Medição de Bicos</span>
+    </a>
+  </header>
+  <main id="app" tabindex="-1"></main>
+  <div id="aviso" class="aviso" role="status" aria-live="polite"></div>
+
+  <div class="entrada" id="entrada">
+    <form class="cartao" id="formEntrada" autocomplete="on" style="display:none">
+      <img src="icones/icone_192.png" alt="">
+      <h1>Medição de Bicos</h1>
+      <label for="usuario">Usuário</label>
+      <input id="usuario" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required>
+      <label for="senha">Senha</label>
+      <input id="senha" type="password" autocomplete="current-password" required>
+      <button id="entrar" type="submit">Entrar</button>
+      <div class="msg" id="msg" role="status" aria-live="polite"></div>
+      <div class="rodape">Acesso dos supervisores. Peça o usuário e a senha a Controles Agrícolas.</div>
+    </form>
+  </div>
+
+  <script src="vendor/jspdf.umd.min.js"></script>
+  <script>
+  (function () {
+    'use strict';
+    // Entrada do app cifrado. O pacote só abre com usuário + senha (PBKDF2-SHA256 → AES-GCM 256).
+    // A chave fica guardada neste celular depois da 1ª entrada: não pede de novo e funciona sem sinal.
+    var CHAVE_LS = 'casi_bicos_chave';
+    var $ = function (id) { return document.getElementById(id); };
+    var deB64 = function (s) { var b = atob(s), u = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; };
+    var paraB64 = function (buf) { var u = new Uint8Array(buf), s = ''; for (var i = 0; i < u.length; i++) s += String.fromCharCode(u[i]); return btoa(s); };
+
+    // Modo offline (mesma regra do app: no localhost só com ?sw=1)
+    var emDesenvolvimento = location.hostname === 'localhost' && location.search.indexOf('sw=1') < 0;
+    if ('serviceWorker' in navigator && location.protocol !== 'file:' && !emDesenvolvimento) {
+      navigator.serviceWorker.register('sw.js').catch(function () {});
+    }
+
+    var pacote = null;
+    function carregarPacote() {
+      if (pacote) return Promise.resolve(pacote);
+      return fetch('pacote.cifrado').then(function (r) {
+        if (!r.ok) throw new Error('rede');
+        return r.json();
+      }).then(function (p) { pacote = p; return p; });
+    }
+
+    function abrir(chave, p) {
+      return crypto.subtle.decrypt({ name: 'AES-GCM', iv: deB64(p.iv) }, chave, deB64(p.dados))
+        .then(function (buf) { return JSON.parse(new TextDecoder().decode(buf)); });
+    }
+
+    function derivar(usuario, senha, p) {
+      var material = new TextEncoder().encode(usuario.trim().toLowerCase() + '\n' + senha);
+      return crypto.subtle.importKey('raw', material, 'PBKDF2', false, ['deriveKey']).then(function (base) {
+        return crypto.subtle.deriveKey({ name: 'PBKDF2', salt: deB64(p.sal), iterations: p.iter, hash: 'SHA-256' },
+          base, { name: 'AES-GCM', length: 256 }, true, ['decrypt']);
+      });
+    }
+
+    function iniciar(c) {
+      var st = document.createElement('style'); st.textContent = c.css; document.head.appendChild(st);
+      $('logoTopo').src = c.logo;
+      $('entrada').remove();
+      document.querySelector('.topo').style.display = '';
+      var s = document.createElement('script'); s.textContent = c.js; document.body.appendChild(s);
+    }
+
+    function mostrarFormulario(texto, ok) {
+      $('formEntrada').style.display = '';
+      $('msg').textContent = texto || '';
+      $('msg').className = 'msg' + (ok ? ' ok' : '');
+    }
+
+    // 1) chave já guardada neste celular?
+    var guardada = null;
+    try { guardada = localStorage.getItem(CHAVE_LS); } catch (e) { /* sem armazenamento */ }
+    carregarPacote().then(function (p) {
+      if (!guardada) return mostrarFormulario();
+      return crypto.subtle.importKey('raw', deB64(guardada), 'AES-GCM', true, ['decrypt'])
+        .then(function (k) { return abrir(k, p); })
+        .then(iniciar)
+        .catch(function () {
+          try { localStorage.removeItem(CHAVE_LS); } catch (e) {}
+          mostrarFormulario('A senha mudou. Entre de novo.');
+        });
+    }).catch(function () {
+      mostrarFormulario('Sem conexão. Na primeira vez, abra o app com internet.');
+    });
+
+    // 2) entrada com usuário e senha
+    $('formEntrada').addEventListener('submit', function (e) {
+      e.preventDefault();
+      var usuario = $('usuario').value, senha = $('senha').value;
+      if (!usuario.trim() || !senha) return mostrarFormulario('Preencha usuário e senha.');
+      $('entrar').disabled = true;
+      mostrarFormulario('Conferindo…', true);
+      var chave;
+      carregarPacote()
+        .then(function (p) { return derivar(usuario, senha, p).then(function (k) { chave = k; return abrir(k, p); }); })
+        .then(function (c) {
+          return crypto.subtle.exportKey('raw', chave).then(function (raw) {
+            try { localStorage.setItem(CHAVE_LS, paraB64(raw)); } catch (e) { /* abre, mas pedirá de novo */ }
+            iniciar(c);
+          });
+        })
+        .catch(function (err) {
+          $('entrar').disabled = false;
+          mostrarFormulario(err && err.message === 'rede'
+            ? 'Sem conexão. Na primeira vez, abra o app com internet.'
+            : 'Usuário ou senha incorretos.');
+          $('senha').value = '';
+          $('senha').focus();
+        });
+    });
+  })();
+  </script>
+</body>
+</html>
