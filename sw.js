@@ -1,6 +1,6 @@
 // Service worker da versão pública (cifrada): guarda o app no celular para abrir sem sinal no campo.
 // Gerado por cifra/cifrar_app.py; o nome do cache segue a VERSAO do config.js (força os celulares a baixarem de novo).
-const CACHE = 'medicao-bicos-v0.7.0';
+const CACHE = 'medicao-bicos-v0.8.0';
 const ARQUIVOS = [
   './', './index.html', './manifest.webmanifest', './pacote.cifrado',
   './vendor/jspdf.umd.min.js', './icones/icone_192.png', './icones/icone_512.png',
