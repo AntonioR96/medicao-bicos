@@ -5,7 +5,7 @@
 // 10 min (max-age=600) e o sw antigo abria o pacote guardado primeiro, atualizando só para a abertura seguinte.
 // Agora: instalação baixa tudo direto do servidor (cache: 'reload') e, com internet, cada abertura busca o arquivo novo
 // primeiro (cache: 'no-cache', revalida pelo ETag); sem sinal ou com rede lenta (mais de 4 s), abre o que está guardado.
-const CACHE = 'medicao-bicos-v0.9.3';
+const CACHE = 'medicao-bicos-v0.9.4';
 const ARQUIVOS = [
   './', './index.html', './manifest.webmanifest', './pacote.cifrado',
   './vendor/jspdf.umd.min.js', './icones/icone_192.png', './icones/icone_512.png',
