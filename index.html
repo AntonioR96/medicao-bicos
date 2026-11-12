@@ -69,13 +69,21 @@
     // Modo offline (mesma regra do app: no localhost só com ?sw=1)
     var emDesenvolvimento = location.hostname === 'localhost' && location.search.indexOf('sw=1') < 0;
     if ('serviceWorker' in navigator && location.protocol !== 'file:' && !emDesenvolvimento) {
-      navigator.serviceWorker.register('sw.js').catch(function () {});
+      // Versão nova publicada: o sw novo assume e a página recarrega uma vez, para já abrir a versão nova
+      // (só nos primeiros 20 s, para não recarregar no meio de uma coleta).
+      var tinhaControle = !!navigator.serviceWorker.controller, recarregou = false, inicio = Date.now();
+      navigator.serviceWorker.addEventListener('controllerchange', function () {
+        if (tinhaControle && !recarregou && Date.now() - inicio < 20000) { recarregou = true; location.reload(); }
+      });
+      navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' })
+        .then(function (reg) { reg.update(); })
+        .catch(function () {});
     }
 
     var pacote = null;
     function carregarPacote() {
       if (pacote) return Promise.resolve(pacote);
-      return fetch('pacote.cifrado').then(function (r) {
+      return fetch('pacote.cifrado', { cache: 'no-cache' }).then(function (r) {
         if (!r.ok) throw new Error('rede');
         return r.json();
       }).then(function (p) { pacote = p; return p; });
